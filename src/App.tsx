@@ -25,7 +25,7 @@ import {
 import { 
   checkForRecursionWithPath 
 } from './utils/schemaUtils';
-import { findLineNumberForPath } from './utils/lineUtils';
+import { findLineNumberForPath, findAllLineNumbersForPath } from './utils/lineUtils';
 
 function App() {
   const [schemaInput, setSchemaInput] = useState('');
@@ -291,6 +291,76 @@ function App() {
     }
   };
   
+  // Render recursion path as clickable links
+  const renderRecursionPathLinks = (path: string) => {
+    if (!path) return null;
+    
+    const pathParts = path.split(' -> ');
+    
+    // Find line numbers for all parts of the path
+    const lineNumbers = findAllLineNumbersForPath(schemaInput, path);
+    
+    return pathParts.map((part, index) => (
+      <span key={index}>
+        <a 
+          href="#" 
+          onClick={(e) => {
+            e.preventDefault();
+            // Find line number for this part of the path
+            const lineNumber = lineNumbers[index];
+            if (lineNumber && (window as any).currentEditor) {
+              const editor = (window as any).currentEditor;
+              // Scroll to the line
+              editor.revealLineInCenter(lineNumber);
+              
+              // Remove previous decorations if they exist
+              if ((editor as any)._pathDecorations) {
+                editor.deltaDecorations((editor as any)._pathDecorations, []);
+              }
+              
+              // Apply temporary decoration to highlight the line
+              const newDecorations = editor.deltaDecorations([], [
+                {
+                  range: new (window as any).monaco.Range(
+                    lineNumber,
+                    1,
+                    lineNumber,
+                    1000 // Large column number to highlight the entire line
+                  ),
+                  options: {
+                    isWholeLine: true,
+                    className: 'recursion-highlight-all',
+                    glyphMarginClassName: 'recursion-glyph-all'
+                  }
+                }
+              ]);
+              
+              // Store decoration IDs for cleanup
+              (editor as any)._pathDecorations = newDecorations;
+              
+              // Remove the decoration after 3 seconds
+              setTimeout(() => {
+                if ((editor as any)._pathDecorations) {
+                  editor.deltaDecorations((editor as any)._pathDecorations, []);
+                  (editor as any)._pathDecorations = [];
+                }
+              }, 3000);
+            }
+          }}
+          style={{
+            color: '#1976d2',
+            textDecoration: 'underline',
+            cursor: 'pointer',
+            fontWeight: lineNumbers[index] ? 'bold' : 'normal'
+          }}
+        >
+          {part}
+        </a>
+        {index < pathParts.length - 1 && ' -> '}
+      </span>
+    ));
+  };
+  
   return (
     <div className="app">
       <Typography variant="h4" gutterBottom align="center">
@@ -509,13 +579,13 @@ function App() {
                     }}>
                       Recursion Path:
                     </Typography>
-                    <Typography variant="body2" style={{ 
+                    <div style={{ 
                       fontFamily: 'monospace', 
                       fontSize: '14px',
                       wordBreak: 'break-all'
                     }}>
-                      {recursionPath}
-                    </Typography>
+                      {renderRecursionPathLinks(recursionPath)}
+                    </div>
                   </div>
                 )}
               </Paper>

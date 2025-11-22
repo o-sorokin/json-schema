@@ -139,11 +139,17 @@ export const findAllLineNumbersForPath = (jsonString: string, path: string): num
     const pathParts = path.split(' -> ');
     if (pathParts.length === 0) return [];
     
+    // Keep track of last found index to avoid finding the same element multiple times
+    let lastFoundIndex = -1;
+    
     // For each part of the path, find corresponding line numbers
     for (const part of pathParts) {
       let searchKey = '';
+      let searchValue = '';
+      
       if (part.startsWith('$ref:')) {
         searchKey = '$ref';
+        searchValue = part.substring(5); // Extract value after "$ref:"
       } else if (part.includes('.')) {
         const propertyParts = part.split('.');
         searchKey = propertyParts[propertyParts.length - 1];
@@ -154,17 +160,64 @@ export const findAllLineNumbersForPath = (jsonString: string, path: string): num
         searchKey = part;
       }
       
-      // Create search pattern
-      const searchPattern = `"${searchKey}"\\s*:\\s*`;
-      const regex = new RegExp(searchPattern);
+      // Search for the key in the JSON lines, starting from last found position
+      let foundLineNumber = null;
       
-      // Search for the key in the JSON lines
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (regex.test(line)) {
-          lineNumbers.push(i + 1); // Line numbers are 1-based
+      if (searchValue) {
+        // For $ref values, look for the exact key-value pair
+        const searchString = `"${searchKey}": "${searchValue}"`;
+        
+        // Search from the last found index + 1 to avoid duplicates
+        for (let i = lastFoundIndex + 1; i < lines.length; i++) {
+          const line = lines[i];
+          if (line.includes(searchString)) {
+            foundLineNumber = i + 1; // Line numbers are 1-based
+            lastFoundIndex = i;
+            break;
+          }
+        }
+        
+        // If not found from last position, search from beginning up to last position
+        if (foundLineNumber === null) {
+          for (let i = 0; i <= lastFoundIndex; i++) {
+            const line = lines[i];
+            if (line.includes(searchString)) {
+              foundLineNumber = i + 1; // Line numbers are 1-based
+              lastFoundIndex = i;
+              break;
+            }
+          }
+        }
+      } else {
+        // Create search pattern for regular keys
+        const searchPattern = `"${searchKey}"\\s*:\\s*`;
+        const regex = new RegExp(searchPattern);
+        
+        // Search from the last found index + 1 to avoid duplicates
+        for (let i = lastFoundIndex + 1; i < lines.length; i++) {
+          const line = lines[i];
+          if (regex.test(line)) {
+            foundLineNumber = i + 1; // Line numbers are 1-based
+            lastFoundIndex = i;
+            break;
+          }
+        }
+        
+        // If not found from last position, search from beginning up to last position
+        if (foundLineNumber === null) {
+          for (let i = 0; i <= lastFoundIndex; i++) {
+            const line = lines[i];
+            if (regex.test(line)) {
+              foundLineNumber = i + 1; // Line numbers are 1-based
+              lastFoundIndex = i;
+              break;
+            }
+          }
         }
       }
+      
+      // Add found line number or 0 if not found
+      lineNumbers.push(foundLineNumber || 0);
     }
     
     return lineNumbers;
