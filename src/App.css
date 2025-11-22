@@ -1,0 +1,88 @@
+#root {
+  max-width: var(--max-width);
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--container-padding);
+}
+
+.app {
+  max-width: var(--max-width);
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--container-padding);
+}
+
+.editor-container {
+  border: var(--border-width) var(--border-style) var(--gray);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+  min-height: var(--editor-min-height);
+}
+
+.validation-result {
+  margin-top: 20px;
+}
+
+.generated-form {
+  border-left: var(--border-width) var(--border-style) var(--light-gray);
+  padding-left: var(--spacing-xl);
+  min-height: var(--editor-min-height);
+}
+
+.form-section {
+  background-color: var(--light-gray);
+  padding: var(--spacing-xl);
+  border-radius: var(--border-radius-sm);
+}
+
+.form-placeholder {
+  border-left: var(--border-width) var(--border-style) var(--light-gray);
+  padding-left: var(--spacing-xl);
+  min-height: var(--editor-min-height);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: var(--medium-gray);
+  text-align: center;
+}
+
+/* Recursion highlighting styles */
+.recursion-highlight {
+  background-color: var(--recursion-highlight) !important;
+  border-left: 3px solid var(--recursion-border) !important;
+}
+
+.recursion-glyph {
+  background-color: var(--recursion-glyph) !important;
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  margin-left: 3px !important;
+}
+
+/* Styles for highlighting all elements in the recursion path */
+.recursion-highlight-all {
+  background-color: var(--recursion-path-highlight) !important;
+  border-left: 3px solid var(--recursion-path-border) !important;
+}
+
+.recursion-glyph-all {
+  background-color: var(--recursion-path-glyph) !important;
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  margin-left: 3px !important;
+}
+
+/* Ensure the grid layout stays side by side */
+@media (min-width: 768px) {
+  .grid-container {
+    display: flex;
+    flex-wrap: nowrap;
+  }
+  
+  .grid-item {
+    flex: 1;
+  }
+}

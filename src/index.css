@@ -1,0 +1,67 @@
+:root {
+  font-family: var(--font-family);
+  line-height: 1.5;
+  font-weight: var(--font-weight-normal);
+
+  color-scheme: light dark;
+  color: var(--dark-theme-text);
+  background-color: var(--dark-theme-bg);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: var(--link-color);
+  text-decoration: inherit;
+}
+a:hover {
+  color: var(--link-hover-color);
+}
+
+body {
+  margin: 0;
+  display: flex;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: var(--border-radius-md);
+  border: var(--border-width) solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--button-bg-dark);
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: var(--link-color);
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: var(--light-theme-text);
+    background-color: var(--light-theme-bg);
+  }
+  a:hover {
+    color: var(--link-light-hover-color);
+  }
+  button {
+    background-color: var(--button-bg-light);
+  }
+}
