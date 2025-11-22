@@ -35,6 +35,21 @@ npm run build
 npm run preview
 ```
 
+## Деплой
+
+### GitHub Pages
+Для публикации на GitHub Pages:
+```
+npm run deploy
+```
+
+### Surge
+Для публикации на Surge:
+```
+npm run build
+surge dist/ json-form-checker.surge.sh
+```
+
 ## Зависимости
 
 - React + TypeScript + Vite
