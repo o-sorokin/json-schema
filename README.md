@@ -1,41 +1,44 @@
-# JSON Schema Validator
+# Валидатор JSON-схем
 
-A simple React application that allows you to validate JSON schemas using AJV (Another JSON Schema Validator).
+Это проект Vibecoding only для проверки и визуализации JSON-схем.
 
-## Features
+## Особенности
 
-- Paste any JSON schema into the text area
-- Click "Validate Schema" to check if the schema is valid
-- Get immediate feedback on whether the schema is valid or invalid
-- Clear error messages for invalid schemas
+- Валидация JSON-схем с помощью AJV (Another JSON Schema Validator)
+- Генерация форм на основе JSON-схем
+- Обнаружение рекурсии в схемах
+- Подсветка строк с рекурсией в редакторе
+- Выбор из примеров схем для тестирования
 
-## Getting Started
+## Начало работы
 
-1. Clone the repository
-2. Install dependencies:
+1. Клонируйте репозиторий
+2. Установите зависимости:
    ```
    npm install
    ```
-3. Start the development server:
+3. Запустите сервер разработки:
    ```
    npm run dev
    ```
-4. Open your browser to http://localhost:5173
+4. Откройте браузер по адресу http://localhost:5173
 
-## Building for Production
+## Сборка для продакшена
 
-To create a production build:
+Для создания продакшен-сборки:
 ```
 npm run build
 ```
 
-To preview the production build:
+Для предварительного просмотра продакшен-сборки:
 ```
 npm run preview
 ```
 
-## Dependencies
+## Зависимости
 
 - React + TypeScript + Vite
-- Ant Design (UI Components)
+- Material UI (UI Components)
 - AJV (JSON Schema Validator)
+- Monaco Editor (Редактор кода)
+- React JSON Schema Form (Генерация форм)
