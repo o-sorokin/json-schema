@@ -3,7 +3,7 @@ type TRefs = Map<string, string[]>
 type TDefinitionsRefs = Map<string, TRefs>
 
 const KEYS_TO_CHECK = ['allOf', 'anyOf', 'oneOf', 'not', 'properties']
-const DEFENITION_KEY_WORD = 'definitions'
+const DEFINITION_KEY_WORD = '$defs'
 const MAX_REF_RESOLUTION_DEPTH = 10
 
 const pathToString = (path: string[]) => path.join(' -> ')
@@ -25,6 +25,7 @@ const collectRefs = (targetSchema: RJSFSchema) => {
             refs.set(ref, path)
         }
 
+        // Исключаем из рекурсии массивы и скалярные типы
         if (!schema || typeof schema !== 'object' || !schema.type || (schema.type && schema.type !== 'object')) {
             return
         }
@@ -52,6 +53,8 @@ const collectRefs = (targetSchema: RJSFSchema) => {
 }
 
 const tryResolveRefs = (ref: string, definitionsRefs: TDefinitionsRefs, path: string[], depth: number = 0)  => {
+    console.log(depth, ref, path);
+    
     if (path.includes(ref)) {
         throw new Error(`Обнаружена циклическая ссылка: ${pathToString([...path, ref])}`)
     }
@@ -71,15 +74,15 @@ export const findCircularRefs = (schema: RJSFSchema) => {
     const schemaRefs = collectRefs(schema)
     console.log(schemaRefs);
 
-    if (!schema[DEFENITION_KEY_WORD]) {
+    if (!schema[DEFINITION_KEY_WORD]) {
         // Если в схеме нет ключевого слова definitions, то циклических ссылок не может быть
         return
     }
     
     const definitionsRefs: TDefinitionsRefs = new Map()
 
-    Object.entries(schema[DEFENITION_KEY_WORD]).forEach(([path, definition]) => {
-        definitionsRefs.set(`#/${DEFENITION_KEY_WORD}/${path}`, collectRefs(definition))
+    Object.entries(schema[DEFINITION_KEY_WORD]).forEach(([path, definition]) => {
+        definitionsRefs.set(`#/${DEFINITION_KEY_WORD}/${path}`, collectRefs(definition))
     })
 
     console.log(definitionsRefs)
