@@ -1,5 +1,6 @@
 type RJSFSchema = any
 type TRefs = Map<string, string[]>
+type TDefinitionsRefs = Map<string, TRefs>
 
 const KEYS_TO_CHECK = ['allOf', 'anyOf', 'oneOf', 'not', 'properties']
 const DEFENITION_KEY_WORD = 'definitions'
@@ -50,20 +51,18 @@ const collectRefs = (targetSchema: RJSFSchema) => {
     return refs
 }
 
-const tryResolveRefs = (ref: string, definitionsRefs: TRefs, path = new Set<string>())  => {
-    if (path.has(ref)) {
+const tryResolveRefs = (ref: string, definitionsRefs: TDefinitionsRefs, path: string[], depth: number = 0)  => {
+    if (path.includes(ref)) {
         throw new Error(`Обнаружена циклическая ссылка: ${pathToString([...path, ref])}`)
     }
 
-    if (path.size > MAX_REF_RESOLUTION_DEPTH) {
+    if (path.length > MAX_REF_RESOLUTION_DEPTH) {
         throw new Error(`Превышена максимальная глубина разрешения ссылок: ${pathToString([...path, ref])}`)
     }
-
+    
     if (definitionsRefs.has(ref)) {
-        path.add(ref)
-
-        for (const [$ref, _] of definitionsRefs.get(ref)) {
-            tryResolveRefs($ref, definitionsRefs, path)
+        for (const [$ref, _] of definitionsRefs.get(ref)!) {
+            tryResolveRefs($ref, definitionsRefs, [...path, ref], depth + 1)
         }
     }
 }
@@ -77,7 +76,7 @@ export const findCircularRefs = (schema: RJSFSchema) => {
         return
     }
     
-    const definitionsRefs: TRefs = new Map()
+    const definitionsRefs: TDefinitionsRefs = new Map()
 
     Object.entries(schema[DEFENITION_KEY_WORD]).forEach(([path, definition]) => {
         definitionsRefs.set(`#/${DEFENITION_KEY_WORD}/${path}`, collectRefs(definition))
@@ -86,6 +85,6 @@ export const findCircularRefs = (schema: RJSFSchema) => {
     console.log(definitionsRefs)
 
     for (const [ref, path] of schemaRefs) {
-        tryResolveRefs(ref, definitionsRefs)
+        tryResolveRefs(ref, definitionsRefs, [])
     }
 }
