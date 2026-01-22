@@ -2,23 +2,10 @@ type RJSFSchema = any
 type TRefs = Map<string, string[]>
 
 const KEYS_TO_CHECK = ['allOf', 'anyOf', 'oneOf', 'not', 'properties']
-const DEFENITION_KEY_WORD = '$defs'
+const DEFENITION_KEY_WORD = 'definitions'
 const MAX_REF_RESOLUTION_DEPTH = 10
 
 const pathToString = (path: string[]) => path.join(' -> ')
-
-const createFullPath = (path: string[], refs: TRefs) => {
-    // console.log(path);
-    // console.log(refs);
-    
-    const fullPath = path.map((p) => {
-        // console.log(refs.get(p));
-        
-        const schemaPath = [...refs.get(p)].join('.')
-        return pathToString([p, schemaPath])
-    })
-    return fullPath
-}
 
 const collectRefs = (targetSchema: RJSFSchema) => {
     const refs: TRefs = new Map()
@@ -63,13 +50,13 @@ const collectRefs = (targetSchema: RJSFSchema) => {
     return refs
 }
 
-const tryResolveRefs = (ref: string, definitionsRefs: TRefs, path = new Set())  => {
+const tryResolveRefs = (ref: string, definitionsRefs: TRefs, path = new Set<string>())  => {
     if (path.has(ref)) {
-        throw new Error(`Обнаружена циклическая ссылка: ${createFullPath([...path, ref], definitionsRefs)}`)
+        throw new Error(`Обнаружена циклическая ссылка: ${pathToString([...path, ref])}`)
     }
 
     if (path.size > MAX_REF_RESOLUTION_DEPTH) {
-        throw new Error(`Превышена максимальная глубина разрешения ссылок: ${createFullPath([...path, ref], definitionsRefs)}`)
+        throw new Error(`Превышена максимальная глубина разрешения ссылок: ${pathToString([...path, ref])}`)
     }
 
     if (definitionsRefs.has(ref)) {
@@ -82,12 +69,13 @@ const tryResolveRefs = (ref: string, definitionsRefs: TRefs, path = new Set())  
 }
 
 export const findCircularRefs = (schema: RJSFSchema) => {
+    const schemaRefs = collectRefs(schema)
+    console.log(schemaRefs);
+
     if (!schema[DEFENITION_KEY_WORD]) {
         // Если в схеме нет ключевого слова definitions, то циклических ссылок не может быть
         return
     }
-
-    const schemaRefs = collectRefs(schema)
     
     const definitionsRefs: TRefs = new Map()
 
