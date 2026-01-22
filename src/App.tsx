@@ -3,7 +3,12 @@ import { Editor } from '@monaco-editor/react';
 import { Form } from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
 import Ajv from 'ajv';
-import { Typography, Chip, Box, Button, Paper, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import { Typography, Chip, Box, Button, Paper, Select, MenuItem, FormControl, InputLabel, IconButton, List, ListItemText, Divider, ButtonBase, Checkbox, Tabs, Tab } from '@mui/material';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import DeleteIcon from '@mui/icons-material/Delete';
+import DescriptionIcon from '@mui/icons-material/Description';
+import SelectAllIcon from '@mui/icons-material/SelectAll';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import './App.css';
 import { 
   simpleUserSchema, 
@@ -37,6 +42,11 @@ function App() {
   const [generatedForm, setGeneratedForm] = useState<React.ReactNode | null>(null);
   const [isSchemaLoading, setIsSchemaLoading] = useState(false);
   const [selectedSchema, setSelectedSchema] = useState('');
+  const [uploadedSchemas, setUploadedSchemas] = useState<Array<{name: string; content: string; isValid: boolean; hasRecursion: boolean; validationMessage: string}>>([]);
+  const [dragActive, setDragActive] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
+  const [activeTab, setActiveTab] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Handle URL parameters and load schema on initial load
@@ -51,6 +61,198 @@ function App() {
       loadExampleSchema('simple');
     }
   }, []);
+
+  // Handle drag and drop events
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(e.target.files);
+    }
+  };
+
+  const handleFiles = async (files: FileList) => {
+    const newSchemas: Array<{name: string; content: string; isValid: boolean; hasRecursion: boolean; validationMessage: string}> = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.type === 'application/json' || file.name.endsWith('.json')) {
+        try {
+          const content = await file.text();
+          // Validate that it's a valid JSON
+          const parsedSchema = JSON.parse(content);
+          
+          // Check for recursion
+          const { hasRecursion } = checkForRecursionWithPath(parsedSchema);
+          
+          // Validate with AJV
+          const ajv = new Ajv();
+          const isValid: boolean = ajv.validateSchema(parsedSchema) as boolean;
+          const validationMessage = isValid ? 'Valid JSON Schema' : `Invalid: ${ajv.errorsText()}`;
+          
+          newSchemas.push({
+            name: file.name,
+            content: content,
+            isValid: isValid,
+            hasRecursion: hasRecursion,
+            validationMessage: validationMessage
+          });
+        } catch (error) {
+          alert(`Error reading file ${file.name}: ${(error as Error).message}`);
+        }
+      } else {
+        alert(`File ${file.name} is not a valid JSON file`);
+      }
+    }
+    
+    if (newSchemas.length > 0) {
+      setUploadedSchemas(prev => [...prev, ...newSchemas]);
+      // Load the first uploaded schema
+      if (uploadedSchemas.length === 0 && newSchemas.length > 0) {
+        loadUploadedSchema(newSchemas[0].content, newSchemas[0].name);
+      }
+    }
+  };
+
+  const loadUploadedSchema = (content: string, name: string) => {
+    setIsSchemaLoading(true);
+    setTimeout(() => {
+      setSchemaInput(content);
+      setSelectedSchema(name);
+      setIsSchemaLoading(false);
+      setRecursionLineNumber(null);
+      
+      // Also update validation results for the loaded schema
+      try {
+        const parsedSchema = JSON.parse(content);
+        const { hasRecursion, recursionPath } = checkForRecursionWithPath(parsedSchema);
+        setHasRecursion(hasRecursion);
+        setRecursionPath(recursionPath);
+        
+        const ajv = new Ajv();
+        const isValid: boolean = ajv.validateSchema(parsedSchema) as boolean;
+        setValidationResult({
+          isValid: isValid,
+          message: isValid ? 'JSON Schema is valid!' : `Invalid JSON Schema: ${ajv.errorsText()}`
+        });
+        
+        // Clear generated form if recursion detected
+        if (hasRecursion) {
+          setGeneratedForm(null);
+        }
+      } catch (error) {
+        setValidationResult({
+          isValid: false,
+          message: `Invalid JSON: ${(error as Error).message}`
+        });
+        setHasRecursion(null);
+        setRecursionPath(null);
+        setGeneratedForm(null);
+      }
+    }, 200);
+  };
+
+  const removeUploadedSchema = (index: number) => {
+    const newSchemas = [...uploadedSchemas];
+    const removedSchema = newSchemas.splice(index, 1)[0];
+    
+    setUploadedSchemas(newSchemas);
+    
+    // Remove from selected files
+    const newSelectedFiles = new Set(selectedFiles);
+    newSelectedFiles.delete(index);
+    // Adjust indices of selected files after deletion
+    const adjustedSelectedFiles = new Set<number>();
+    newSelectedFiles.forEach(selectedIndex => {
+      if (selectedIndex > index) {
+        adjustedSelectedFiles.add(selectedIndex - 1);
+      } else if (selectedIndex < index) {
+        adjustedSelectedFiles.add(selectedIndex);
+      }
+    });
+    setSelectedFiles(adjustedSelectedFiles);
+    
+    // If the removed schema was the currently selected one, load another one
+    if (selectedSchema === removedSchema.name) {
+      if (newSchemas.length > 0) {
+        loadUploadedSchema(newSchemas[0].content, newSchemas[0].name);
+      } else {
+        // Load default schema
+        loadExampleSchema('simple');
+      }
+    }
+  };
+
+  // Toggle selection of a single file
+  const toggleFileSelection = (index: number) => {
+    const newSelectedFiles = new Set(selectedFiles);
+    if (newSelectedFiles.has(index)) {
+      newSelectedFiles.delete(index);
+    } else {
+      newSelectedFiles.add(index);
+    }
+    setSelectedFiles(newSelectedFiles);
+  };
+
+  // Select all files
+  const selectAllFiles = () => {
+    if (selectedFiles.size === uploadedSchemas.length) {
+      // If all are selected, deselect all
+      setSelectedFiles(new Set());
+    } else {
+      // Select all files
+      const allIndices = new Set<number>();
+      uploadedSchemas.forEach((_, index) => allIndices.add(index));
+      setSelectedFiles(allIndices);
+    }
+  };
+
+  // Delete selected files
+  const deleteSelectedFiles = () => {
+    if (selectedFiles.size === 0) return;
+    
+    const sortedIndices = Array.from(selectedFiles).sort((a, b) => b - a); // Sort descending
+    let newSchemas = [...uploadedSchemas];
+    let needToLoadNewSchema = false;
+    
+    // Remove files starting from highest index to avoid index shifting issues
+    for (const index of sortedIndices) {
+      const removedSchema = newSchemas.splice(index, 1)[0];
+      if (removedSchema.name === selectedSchema) {
+        needToLoadNewSchema = true;
+      }
+    }
+    
+    setUploadedSchemas(newSchemas);
+    setSelectedFiles(new Set());
+    
+    // Load a new schema if the current one was deleted
+    if (needToLoadNewSchema) {
+      if (newSchemas.length > 0) {
+        loadUploadedSchema(newSchemas[0].content, newSchemas[0].name);
+      } else {
+        loadExampleSchema('simple');
+      }
+    }
+  };
 
   // Update URL when selected schema changes
   useEffect(() => {
@@ -503,41 +705,236 @@ function App() {
                   />
                 )}
               </Paper>
-            <Box sx={{ width: '340px' }}>
-              <FormControl fullWidth>
-                <InputLabel id="schema-select-label">Select Example Schema</InputLabel>
-                <Select
-                  labelId="schema-select-label"
-                  id="schema-select"
-                  value={selectedSchema}
-                  label="Select Example Schema"
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      loadExampleSchema(e.target.value as string);
-                    }
-                  }}
-                >
-                  <MenuItem value="empty">Empty Schema</MenuItem>
-                  <MenuItem value="simple">Simple User Schema</MenuItem>
-                  <MenuItem value="nested">Nested Object Schema</MenuItem>
-                  <MenuItem value="references">Schema with References</MenuItem>
-                  <MenuItem value="compositions">Schema with Compositions</MenuItem>
-                  <MenuItem value="complex">Complex Schema</MenuItem>
-                  <MenuItem value="recursive">Recursive Schema</MenuItem>
-                  <MenuItem value="mutualRecursion">Mutual Recursion Schema</MenuItem>
-                  <MenuItem value="linkedList">Linked List Schema</MenuItem>
-                  <MenuItem value="recursiveList">Recursive List</MenuItem>
-                  <MenuItem value="indirectAB">Indirect A-B Recursion</MenuItem>
-                  <MenuItem value="uiLayout">UI Layout Schema</MenuItem>
-                  <MenuItem value="product">Product Schema</MenuItem>
-                  <MenuItem value="complexComposed">Complex Composed Schema</MenuItem>
-                  <MenuItem value="deepIndirect">Deep Indirect ABC Recursion</MenuItem>
-                  <MenuItem value="graphQL">GraphQL Type Schema</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+            
+            {/* Tabs Section */}
+            <Paper elevation={2}>
+              <Tabs 
+                value={activeTab} 
+                onChange={(_, newValue) => setActiveTab(newValue)}
+                indicatorColor="primary"
+                textColor="primary"
+                variant="fullWidth"
+              >
+                <Tab label="Example Schemas" />
+                <Tab label={`Uploaded Files (${uploadedSchemas.length})`} />
+              </Tabs>
+            </Paper>
+            
+            {activeTab === 0 ? (
+              // Example Schemas Tab
+              <Paper elevation={1} style={{ padding: '24px' }}>
+                <Box sx={{ width: '100%' }}>
+                  <FormControl fullWidth>
+                    <InputLabel id="schema-select-label">Select Example Schema</InputLabel>
+                    <Select
+                      labelId="schema-select-label"
+                      id="schema-select"
+                      value={selectedSchema}
+                      label="Select Example Schema"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          loadExampleSchema(e.target.value as string);
+                        }
+                      }}
+                    >
+                      <MenuItem value="empty">Empty Schema</MenuItem>
+                      <MenuItem value="simple">Simple User Schema</MenuItem>
+                      <MenuItem value="nested">Nested Object Schema</MenuItem>
+                      <MenuItem value="references">Schema with References</MenuItem>
+                      <MenuItem value="compositions">Schema with Compositions</MenuItem>
+                      <MenuItem value="complex">Complex Schema</MenuItem>
+                      <MenuItem value="recursive">Recursive Schema</MenuItem>
+                      <MenuItem value="mutualRecursion">Mutual Recursion Schema</MenuItem>
+                      <MenuItem value="linkedList">Linked List Schema</MenuItem>
+                      <MenuItem value="recursiveList">Recursive List</MenuItem>
+                      <MenuItem value="indirectAB">Indirect A-B Recursion</MenuItem>
+                      <MenuItem value="uiLayout">UI Layout Schema</MenuItem>
+                      <MenuItem value="product">Product Schema</MenuItem>
+                      <MenuItem value="complexComposed">Complex Composed Schema</MenuItem>
+                      <MenuItem value="deepIndirect">Deep Indirect ABC Recursion</MenuItem>
+                      <MenuItem value="graphQL">GraphQL Type Schema</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+              </Paper>
+            ) : (
+              // Uploaded Files Tab
+              <Paper elevation={1} style={{ padding: '24px' }}>
+                {/* Upload Section */}
+                <Box mb={3}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Upload JSON Schemas
+                  </Typography>
+                  
+                  {/* Drag and Drop Zone */}
+                  <Paper 
+                    variant="outlined"
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      borderStyle: dragActive ? 'dashed' : 'solid',
+                      borderColor: dragActive ? 'primary.main' : 'grey.300',
+                      backgroundColor: dragActive ? 'primary.light' : 'transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        backgroundColor: 'grey.50'
+                      }
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <CloudUploadIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+                    <Typography variant="body2">
+                      Drag & drop JSON files here or click to browse
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Supports multiple files
+                    </Typography>
+                  </Paper>
+                  
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    multiple
+                    onChange={handleFileInput}
+                    style={{ display: 'none' }}
+                  />
+                </Box>
+                
+                {/* Uploaded Schemas List */}
+                {uploadedSchemas.length > 0 && (
+                  <Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                      <Typography variant="subtitle2">
+                        Uploaded Schemas
+                      </Typography>
+                      <Box display="flex" gap={1}>
+                        <IconButton 
+                          size="small" 
+                          onClick={selectAllFiles}
+                          title={selectedFiles.size === uploadedSchemas.length ? "Deselect all" : "Select all"}
+                        >
+                          <SelectAllIcon />
+                        </IconButton>
+                        <IconButton 
+                          size="small" 
+                          onClick={deleteSelectedFiles}
+                          disabled={selectedFiles.size === 0}
+                          color={selectedFiles.size > 0 ? "error" : "inherit"}
+                          title="Delete selected"
+                        >
+                          <DeleteSweepIcon />
+                        </IconButton>
+                      </Box>
+                    </Box>
+                    <Paper variant="outlined">
+                      <List dense sx={{ maxHeight: 300, overflow: 'auto' }}>
+                        {uploadedSchemas.map((schema, index) => (
+                          <React.Fragment key={index}>
+                            <ButtonBase
+                              sx={{
+                                width: '100%',
+                                textAlign: 'left',
+                                p: 1,
+                                borderRadius: 1,
+                                '&:hover': {
+                                  backgroundColor: 'grey.100'
+                                },
+                                ...(selectedSchema === schema.name && {
+                                  backgroundColor: 'primary.light'
+                                })
+                              }}
+                              onClick={() => {
+                                if (selectedFiles.size > 0) {
+                                  toggleFileSelection(index);
+                                } else {
+                                  loadUploadedSchema(schema.content, schema.name);
+                                }
+                              }}
+                            >
+                              <Box display="flex" alignItems="center" width="100%" pr={4}>
+                                <Checkbox
+                                  checked={selectedFiles.has(index)}
+                                  onChange={() => toggleFileSelection(index)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  size="small"
+                                />
+                                <DescriptionIcon sx={{ mr: 1, color: 'primary.main' }} />
+                                <Box flex={1}>
+                                  <ListItemText 
+                                    primary={schema.name}
+                                    primaryTypographyProps={{
+                                      noWrap: true,
+                                      style: { fontSize: '0.875rem' }
+                                    }}
+                                  />
+                                  <Box display="flex" gap={1} mt={0.5}>
+                                    <Chip 
+                                      size="small"
+                                      label={schema.isValid ? "Valid" : "Invalid"}
+                                      color={schema.isValid ? "success" : "error"}
+                                      variant="outlined"
+                                    />
+                                    <Chip 
+                                      size="small"
+                                      label={schema.hasRecursion ? "Recursive" : "No Recursion"}
+                                      color={schema.hasRecursion ? "warning" : "success"}
+                                      variant="outlined"
+                                    />
+                                  </Box>
+                                  {!schema.isValid && (
+                                    <Typography 
+                                      variant="caption" 
+                                      color="error" 
+                                      sx={{ 
+                                        display: 'block',
+                                        mt: 0.5,
+                                        fontStyle: 'italic'
+                                      }}
+                                    >
+                                      {schema.validationMessage}
+                                    </Typography>
+                                  )}
+                                </Box>
+                                <IconButton 
+                                  edge="end" 
+                                  aria-label="delete"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeUploadedSchema(index);
+                                  }}
+                                  size="small"
+                                  sx={{ position: 'absolute', right: 8 }}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Box>
+                            </ButtonBase>
+                            {index < uploadedSchemas.length - 1 && <Divider />}
+                          </React.Fragment>
+                        ))}
+                      </List>
+                    </Paper>
+                  </Box>
+                )}
+                
+                {uploadedSchemas.length === 0 && (
+                  <Typography variant="body2" color="text.secondary" align="center" py={4}>
+                    No files uploaded yet. Drag & drop JSON files above.
+                  </Typography>
+                )}
+              </Paper>
+            )}
           </Box>
         </div>
+        
+        {/* Form Column */}
         <div className="grid-item">
           <Box display="flex" flexDirection="column" gap={2}>
             {generatedForm ? (
@@ -552,7 +949,8 @@ function App() {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                minHeight: '400px'
               }}>
                 <Typography variant="h5" gutterBottom style={{ 
                   color: '#f44336',
@@ -606,7 +1004,8 @@ function App() {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                minHeight: '400px'
               }}>
                 <Typography variant="h5" gutterBottom style={{ 
                   color: '#666',
