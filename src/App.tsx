@@ -26,6 +26,7 @@ import {
   checkForRecursionWithPath 
 } from './utils/schemaUtils';
 import { findLineNumberForPath, findAllLineNumbersForPath } from './utils/lineUtils';
+import { findCircularRefs } from './utils/cycleRefs';
 
 function App() {
   const [schemaInput, setSchemaInput] = useState('');
@@ -140,6 +141,12 @@ function App() {
   }, [validationResult, hasRecursion]);
 
   const validateSchema = async () => {
+    try {
+      findCircularRefs(JSON.parse(schemaInput));
+    } catch (e) {
+      console.error(e);
+    }
+
     try {
       // Parse the JSON schema
       const schema = JSON.parse(schemaInput);
