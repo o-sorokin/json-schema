@@ -20,8 +20,7 @@ import {
   ProductSchema,
   ComplexComposedSchema,
   DeepIndirectABC,
-  GraphQLTypeSchema,
-  RealUserSchema
+  GraphQLTypeSchema
 } from './utils/schemaExamples';
 import { 
   checkForRecursionWithPath 
@@ -283,8 +282,7 @@ function App() {
       product: ProductSchema,
       complexComposed: ComplexComposedSchema,
       deepIndirect: DeepIndirectABC,
-      graphQL: GraphQLTypeSchema,
-      realUserSchema: RealUserSchema
+      graphQL: GraphQLTypeSchema
     };
     
     const selectedSchema = schemas[schemaName];
@@ -535,7 +533,6 @@ function App() {
                   <MenuItem value="complexComposed">Complex Composed Schema</MenuItem>
                   <MenuItem value="deepIndirect">Deep Indirect ABC Recursion</MenuItem>
                   <MenuItem value="graphQL">GraphQL Type Schema</MenuItem>
-                  <MenuItem value="realUserSchema">Real User Schema</MenuItem>
                 </Select>
               </FormControl>
             </Box>
