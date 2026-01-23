@@ -3,7 +3,7 @@ import { Editor } from '@monaco-editor/react';
 import { Form } from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
 import Ajv from 'ajv';
-import { Typography, Chip, Box, Button, Paper, Select, MenuItem, FormControl, InputLabel, IconButton, List, ListItemText, Divider, ButtonBase, Checkbox, Tabs, Tab } from '@mui/material';
+import { Typography, Chip, Box, Button, Paper, Select, MenuItem, FormControl, InputLabel, IconButton, List, ButtonBase, Checkbox, Tabs, Tab } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -42,7 +42,7 @@ function App() {
   const [generatedForm, setGeneratedForm] = useState<React.ReactNode | null>(null);
   const [isSchemaLoading, setIsSchemaLoading] = useState(false);
   const [selectedSchema, setSelectedSchema] = useState('');
-  const [uploadedSchemas, setUploadedSchemas] = useState<Array<{name: string; content: string; isValid: boolean; hasRecursion: boolean; validationMessage: string}>>([]);
+  const [uploadedSchemas, setUploadedSchemas] = useState<Array<{name: string; content: string; isValid: boolean; hasCircularRefs: boolean; validationMessage: string}>>([]);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState(0);
@@ -90,7 +90,7 @@ function App() {
   };
 
   const handleFiles = async (files: FileList) => {
-    const newSchemas: Array<{name: string; content: string; isValid: boolean; hasRecursion: boolean; validationMessage: string}> = [];
+    const newSchemas: Array<{name: string; content: string; isValid: boolean; hasCircularRefs: boolean; validationMessage: string}> = [];
     
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -100,8 +100,13 @@ function App() {
           // Validate that it's a valid JSON
           const parsedSchema = JSON.parse(content);
           
-          // Check for recursion
-          const { hasRecursion } = checkForRecursionWithPath(parsedSchema);
+          // Check for circular references (detailed analysis)
+          let hasCircularRefs = false;
+          try {
+            findCircularRefs(parsedSchema);
+          } catch (error) {
+            hasCircularRefs = true;
+          }
           
           // Validate with AJV
           const ajv = new Ajv();
@@ -112,7 +117,7 @@ function App() {
             name: file.name,
             content: content,
             isValid: isValid,
-            hasRecursion: hasRecursion,
+            hasCircularRefs: hasCircularRefs,
             validationMessage: validationMessage
           });
         } catch (error) {
@@ -811,14 +816,21 @@ function App() {
                 {uploadedSchemas.length > 0 && (
                   <Box>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                      <Typography variant="subtitle2">
-                        Uploaded Schemas
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                        Uploaded Schemas ({uploadedSchemas.length})
                       </Typography>
                       <Box display="flex" gap={1}>
                         <IconButton 
                           size="small" 
                           onClick={selectAllFiles}
                           title={selectedFiles.size === uploadedSchemas.length ? "Deselect all" : "Select all"}
+                          sx={{ 
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            '&:hover': {
+                              backgroundColor: 'action.hover'
+                            }
+                          }}
                         >
                           <SelectAllIcon />
                         </IconButton>
@@ -828,26 +840,54 @@ function App() {
                           disabled={selectedFiles.size === 0}
                           color={selectedFiles.size > 0 ? "error" : "inherit"}
                           title="Delete selected"
+                          sx={{ 
+                            border: '1px solid',
+                            borderColor: selectedFiles.size > 0 ? 'error.main' : 'divider',
+                            '&:hover': {
+                              backgroundColor: selectedFiles.size > 0 ? 'error.light' : 'action.hover'
+                            },
+                            '&.Mui-disabled': {
+                              borderColor: 'divider'
+                            }
+                          }}
                         >
                           <DeleteSweepIcon />
                         </IconButton>
                       </Box>
                     </Box>
-                    <Paper variant="outlined">
-                      <List dense sx={{ maxHeight: 300, overflow: 'auto' }}>
+                    <Paper 
+                      variant="outlined" 
+                      sx={{ 
+                        borderRadius: 2,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      <List disablePadding>
                         {uploadedSchemas.map((schema, index) => (
                           <React.Fragment key={index}>
                             <ButtonBase
                               sx={{
                                 width: '100%',
                                 textAlign: 'left',
-                                p: 1,
-                                borderRadius: 1,
+                                p: 2,
+                                transition: 'all 0.2s ease',
+                                borderBottom: index < uploadedSchemas.length - 1 ? '1px solid' : 'none',
+                                borderBottomColor: 'divider',
                                 '&:hover': {
-                                  backgroundColor: 'grey.100'
+                                  backgroundColor: 'action.hover'
+                                },
+                                '&:last-child': {
+                                  borderBottom: 'none'
                                 },
                                 ...(selectedSchema === schema.name && {
-                                  backgroundColor: 'primary.light'
+                                  backgroundColor: 'primary.light',
+                                  borderLeft: '3px solid',
+                                  borderLeftColor: 'primary.main'
+                                }),
+                                ...(selectedFiles.has(index) && {
+                                  backgroundColor: 'secondary.light'
                                 })
                               }}
                               onClick={() => {
@@ -858,50 +898,106 @@ function App() {
                                 }
                               }}
                             >
-                              <Box display="flex" alignItems="center" width="100%" pr={4}>
+                              <Box display="flex" alignItems="flex-start" width="100%">
                                 <Checkbox
                                   checked={selectedFiles.has(index)}
                                   onChange={() => toggleFileSelection(index)}
                                   onClick={(e) => e.stopPropagation()}
                                   size="small"
+                                  sx={{ 
+                                    mt: 0.5,
+                                    '&.Mui-checked': {
+                                      color: 'secondary.main'
+                                    }
+                                  }}
                                 />
-                                <DescriptionIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                <Box flex={1}>
-                                  <ListItemText 
-                                    primary={schema.name}
-                                    primaryTypographyProps={{
-                                      noWrap: true,
-                                      style: { fontSize: '0.875rem' }
-                                    }}
-                                  />
-                                  <Box display="flex" gap={1} mt={0.5}>
-                                    <Chip 
-                                      size="small"
-                                      label={schema.isValid ? "Valid" : "Invalid"}
-                                      color={schema.isValid ? "success" : "error"}
-                                      variant="outlined"
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                  <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                                    <DescriptionIcon 
+                                      sx={{ 
+                                        fontSize: 20, 
+                                        color: selectedSchema === schema.name ? 'primary.main' : 'action.active'
+                                      }} 
                                     />
-                                    <Chip 
-                                      size="small"
-                                      label={schema.hasRecursion ? "Recursive" : "No Recursion"}
-                                      color={schema.hasRecursion ? "warning" : "success"}
-                                      variant="outlined"
-                                    />
+                                    <Typography 
+                                      variant="body2" 
+                                      sx={{ 
+                                        fontWeight: selectedSchema === schema.name ? 600 : 500,
+                                        color: 'text.primary',
+                                        flex: 1,
+                                        minWidth: 0
+                                      }}
+                                      noWrap
+                                    >
+                                      {schema.name}
+                                    </Typography>
+                                    <Box display="flex" gap={0.5}>
+                                      <Chip 
+                                        size="small"
+                                        label={schema.isValid ? "Valid" : "Invalid"}
+                                        color={schema.isValid ? "success" : "error"}
+                                        variant="filled"
+                                        sx={{ 
+                                          height: 20,
+                                          '& .MuiChip-label': {
+                                            px: 0.5,
+                                            fontSize: '0.65rem'
+                                          }
+                                        }}
+                                      />
+                                      <Chip 
+                                        size="small"
+                                        label={
+                                          schema.hasCircularRefs ? "↻ Circular" : 
+                                          "Linear"
+                                        }
+                                        color={
+                                          schema.hasCircularRefs ? "error" : 
+                                          "success"
+                                        }
+                                        variant="filled"
+                                        sx={{ 
+                                          height: 20,
+                                          '& .MuiChip-label': {
+                                            px: 0.5,
+                                            fontSize: '0.65rem'
+                                          }
+                                        }}
+                                      />
+                                    </Box>
                                   </Box>
-                                  {!schema.isValid && (
+                                  
+                                  <Box display="flex" alignItems="center" gap={1}>
                                     <Typography 
                                       variant="caption" 
-                                      color="error" 
+                                      color="text.secondary"
                                       sx={{ 
-                                        display: 'block',
-                                        mt: 0.5,
-                                        fontStyle: 'italic'
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 0.5
                                       }}
                                     >
-                                      {schema.validationMessage}
+                                      <span>{schema.content.length.toLocaleString()} chars</span>
                                     </Typography>
-                                  )}
+                                    
+                                    {!schema.isValid && (
+                                      <Typography 
+                                        variant="caption" 
+                                        color="error" 
+                                        sx={{ 
+                                          fontStyle: 'italic',
+                                          maxWidth: '60%',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        {schema.validationMessage}
+                                      </Typography>
+                                    )}
+                                  </Box>
                                 </Box>
+                                
                                 <IconButton 
                                   edge="end" 
                                   aria-label="delete"
@@ -910,13 +1006,19 @@ function App() {
                                     removeUploadedSchema(index);
                                   }}
                                   size="small"
-                                  sx={{ position: 'absolute', right: 8 }}
+                                  sx={{ 
+                                    ml: 1,
+                                    color: 'text.secondary',
+                                    '&:hover': {
+                                      color: 'error.main',
+                                      backgroundColor: 'error.light'
+                                    }
+                                  }}
                                 >
                                   <DeleteIcon />
                                 </IconButton>
                               </Box>
                             </ButtonBase>
-                            {index < uploadedSchemas.length - 1 && <Divider />}
                           </React.Fragment>
                         ))}
                       </List>

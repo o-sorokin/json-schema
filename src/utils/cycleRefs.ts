@@ -3,7 +3,7 @@ type TRefs = Map<string, string[]>
 type TDefinitionsRefs = Map<string, TRefs>
 
 const KEYS_TO_CHECK = ['allOf', 'anyOf', 'oneOf', 'not', 'properties']
-const DEFINITION_KEY_WORD = '$defs'
+const DEFINITION_KEY_WORD = 'definitions'
 const MAX_REF_RESOLUTION_DEPTH = 10
 
 const pathToString = (path: string[]) => path.join(' -> ')
@@ -54,6 +54,7 @@ const collectRefs = (targetSchema: RJSFSchema) => {
 
 const tryResolveRefs = (ref: string, definitionsRefs: TDefinitionsRefs, path: string[], depth: number = 0)  => {
     console.log(depth, ref, path);
+    console.log(definitionsRefs);
     
     if (path.includes(ref)) {
         throw new Error(`Обнаружена циклическая ссылка: ${pathToString([...path, ref])}`)
@@ -87,7 +88,7 @@ export const findCircularRefs = (schema: RJSFSchema) => {
 
     console.log(definitionsRefs)
 
-    for (const [ref, path] of schemaRefs) {
+    for (const [ref] of schemaRefs) {
         tryResolveRefs(ref, definitionsRefs, [])
     }
 }
